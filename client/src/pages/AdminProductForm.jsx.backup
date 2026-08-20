@@ -1,0 +1,486 @@
+// client/src/pages/AdminProductForm.jsx
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import axios from "axios";
+import { useToast } from "../context/ToastContext";
+import { Upload, X, Image, Video } from "lucide-react";
+
+const [uploadProgress, setUploadProgress] = useState(0);
+const [uploadCount, setUploadCount] = useState(0);
+
+const AdminProductForm = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const isEditing = Boolean(id);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    category: "",
+    gender: "Men",
+    price: "",
+    description: "",
+    images: [],
+    sizes: [""],
+    colors: [""],
+    stock: "",
+    isNew: false,
+  });
+
+  useEffect(() => {
+    if (isEditing) {
+      fetchProduct();
+    }
+  }, [id]);
+
+  const fetchProduct = async () => {
+    try {
+      const res = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/products/${id}`,
+      );
+      const p = res.data;
+      setFormData({
+        name: p.name,
+        category: p.category,
+        gender: p.gender || "Men",
+        price: p.price,
+        description: p.description,
+        images: p.images || [],
+        sizes: p.sizes || [""],
+        colors: p.colors || [""],
+        stock: p.stock,
+        isNew: p.isNew || false,
+      });
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      showToast("Failed to load product");
+      navigate("/admin/dashboard");
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleArrayChange = (field, index, value) => {
+    const newArray = [...formData[field]];
+    newArray[index] = value;
+    setFormData({ ...formData, [field]: newArray });
+  };
+
+  const addArrayItem = (field) => {
+    setFormData({ ...formData, [field]: [...formData[field], ""] });
+  };
+
+  const removeArrayItem = (field, index) => {
+    const newArray = formData[field].filter((_, i) => i !== index);
+    setFormData({ ...formData, [field]: newArray });
+  };
+
+  const removeImage = (index) => {
+    const newImages = formData.images.filter((_, i) => i !== index);
+    setFormData({ ...formData, images: newImages });
+  };
+
+  // --- Handle multiple file upload ---
+  const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    setUploadCount(files.length);
+    setUploadProgress(0);
+
+    const uploadedUrls = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+
+      try {
+        const res = await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/admin/upload`,
+          formDataUpload,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          },
+        );
+        uploadedUrls.push(res.data.url);
+        setUploadProgress(((i + 1) / files.length) * 100);
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+        showToast(`Failed to upload ${file.name}`);
+      }
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      images: [...prev.images, ...uploadedUrls],
+    }));
+
+    setUploading(false);
+    setUploadProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    showToast(`Successfully uploaded ${uploadedUrls.length} files!`);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    const payload = {
+      ...formData,
+      price: parseFloat(formData.price),
+      stock: parseInt(formData.stock),
+      images: formData.images.filter((url) => url.trim()),
+      sizes: formData.sizes.filter((s) => s.trim()),
+      colors: formData.colors.filter((c) => c.trim()),
+    };
+
+    try {
+      if (isEditing) {
+        await axios.put(
+          `${import.meta.env.VITE_API_URL}/api/admin/products/${id}`,
+          payload,
+        );
+        showToast("Product updated successfully");
+      } else {
+        await axios.post(
+          `${import.meta.env.VITE_API_URL}/api/admin/products`,
+          payload,
+        );
+        showToast("Product created successfully");
+      }
+      navigate("/admin/dashboard");
+    } catch (error) {
+      console.error("Error saving product:", error);
+      showToast("Failed to save product");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Helper to detect if URL is a video ---
+  const isVideoUrl = (url) => {
+    if (!url) return false;
+    const videoExtensions = [".mp4", ".webm", ".mov", ".ogg", ".avi"];
+    return videoExtensions.some((ext) => url.toLowerCase().includes(ext));
+  };
+
+  return (
+    <div className="pt-24 md:pt-32 px-6 max-w-3xl mx-auto pb-20">
+      <div className="flex items-center gap-4 mb-8">
+        <Link
+          to="/admin/dashboard"
+          className="text-sm text-luxury-gray hover:text-luxury-black transition"
+        >
+          ← Back
+        </Link>
+        <h1 className="text-2xl md:text-3xl font-serif font-light">
+          {isEditing ? "Edit" : "Add New"} Product
+        </h1>
+      </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 bg-white p-6 md:p-8 shadow-xl"
+      >
+        {/* Name */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+            Product Name *
+          </label>
+          <input
+            type="text"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+            required
+          />
+        </div>
+        {/* Category & Gender */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+              Category *
+            </label>
+            <input
+              type="text"
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
+              className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+              placeholder="e.g., Gowns, Kaftan, Senator"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+              Gender *
+            </label>
+            <select
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+              className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+              required
+            >
+              <option value="Men">Men</option>
+              <option value="Women">Women</option>
+            </select>
+          </div>
+        </div>
+        {/* Price & Stock */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+              Price ($) *
+            </label>
+            <input
+              type="number"
+              name="price"
+              value={formData.price}
+              onChange={handleChange}
+              className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+              step="0.01"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+              Stock *
+            </label>
+            <input
+              type="number"
+              name="stock"
+              value={formData.stock}
+              onChange={handleChange}
+              className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+              min="0"
+              required
+            />
+          </div>
+        </div>
+        {/* Description */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+            Description *
+          </label>
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows="4"
+            className="w-full bg-luxury-cream/40 border border-luxury-cream rounded-sm py-3 px-4 text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition resize-none"
+            required
+          />
+        </div>
+        {/* ===== NEW: IMAGE UPLOAD SECTION ===== */}
+        // ===== NEW: MULTIPLE FILE UPLOAD SECTION =====
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+            Images & Videos
+          </label>
+
+          {/* Upload Button - Now supports multiple files */}
+          <div className="flex items-center gap-4 mb-4">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="px-6 py-2 border border-luxury-cream text-sm font-sans hover:border-luxury-black transition flex items-center gap-2 disabled:opacity-50"
+            >
+              <Upload size={16} />
+              {uploading ? `Uploading ${uploadCount} files...` : "Upload Files"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileUpload}
+              className="hidden"
+              multiple // <-- THIS ALLOWS MULTIPLE FILES
+            />
+            <span className="text-xs text-luxury-gray font-light">
+              Select multiple images (JPG, PNG, WebP) and videos (MP4, WebM,
+              MOV) up to 50MB each
+            </span>
+          </div>
+
+          {/* Upload Progress */}
+          {uploading && (
+            <div className="w-full bg-luxury-cream rounded-full h-2 mb-4 overflow-hidden">
+              <div
+                className="bg-luxury-gold h-2 transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          )}
+
+          {/* Image/Video Preview Grid */}
+          {formData.images.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {formData.images.map((url, index) => (
+                <div
+                  key={index}
+                  className="relative group aspect-square bg-luxury-cream overflow-hidden border border-luxury-cream"
+                >
+                  {isVideoUrl(url) ? (
+                    <video
+                      src={url}
+                      className="w-full h-full object-cover"
+                      muted
+                      loop
+                      playsInline
+                    />
+                  ) : (
+                    <img
+                      src={url}
+                      alt={`Media ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        e.target.src =
+                          "https://placehold.co/200x200/e0e0e0/0A0A0A?text=Error";
+                      }}
+                    />
+                  )}
+                  {/* Badge: Image or Video */}
+                  <div className="absolute top-1 left-1 bg-luxury-black/70 text-white text-[8px] px-1.5 py-0.5 rounded uppercase font-sans font-medium backdrop-blur-sm">
+                    {isVideoUrl(url) ? "Video" : "Image"}
+                  </div>
+                  {/* Remove Button */}
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition duration-200 hover:scale-110"
+                    aria-label="Remove image"
+                  >
+                    <X size={14} />
+                  </button>
+                  {/* Index Number */}
+                  <div className="absolute bottom-1 right-1 bg-luxury-black/50 text-white text-[9px] px-1.5 py-0.5 rounded font-sans font-medium backdrop-blur-sm">
+                    #{index + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {formData.images.length === 0 && (
+            <div className="border-2 border-dashed border-luxury-cream p-8 text-center">
+              <p className="text-sm text-luxury-gray font-light">
+                No files uploaded yet. Click the button above to upload images
+                or videos.
+              </p>
+            </div>
+          )}
+        </div>
+        {/* Sizes */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+            Sizes
+          </label>
+          {formData.sizes.map((size, index) => (
+            <div key={index} className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={size}
+                onChange={(e) =>
+                  handleArrayChange("sizes", index, e.target.value)
+                }
+                className="flex-1 bg-luxury-cream/40 border border-luxury-cream rounded-sm py-2 px-3 text-sm text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+                placeholder={`Size ${index + 1}`}
+              />
+              {index > 0 && (
+                <button
+                  type="button"
+                  onClick={() => removeArrayItem("sizes", index)}
+                  className="px-3 text-red-500 hover:text-red-700 transition"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => addArrayItem("sizes")}
+            className="text-sm text-luxury-gold hover:underline"
+          >
+            + Add size
+          </button>
+        </div>
+        {/* Colors */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-luxury-charcoal mb-2">
+            Colors
+          </label>
+          {formData.colors.map((color, index) => (
+            <div key={index} className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={color}
+                onChange={(e) =>
+                  handleArrayChange("colors", index, e.target.value)
+                }
+                className="flex-1 bg-luxury-cream/40 border border-luxury-cream rounded-sm py-2 px-3 text-sm text-luxury-black focus:outline-none focus:ring-2 focus:ring-luxury-gold focus:border-transparent transition"
+                placeholder={`Color ${index + 1}`}
+              />
+              {index > 0 && (
+                <button
+                  type="button"
+                  onClick={() => removeArrayItem("colors", index)}
+                  className="px-3 text-red-500 hover:text-red-700 transition"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => addArrayItem("colors")}
+            className="text-sm text-luxury-gold hover:underline"
+          >
+            + Add color
+          </button>
+        </div>
+        {/* Is New */}
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            name="isNew"
+            checked={formData.isNew}
+            onChange={handleChange}
+            className="w-5 h-5 text-luxury-gold focus:ring-luxury-gold"
+          />
+          <label className="text-sm font-sans text-luxury-charcoal">
+            Mark as "New"
+          </label>
+        </div>
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={loading || uploading}
+          className="w-full py-4 bg-luxury-black text-luxury-white text-sm tracking-[0.2em] uppercase font-sans font-medium hover:bg-luxury-charcoal transition duration-300 disabled:opacity-50"
+        >
+          {loading
+            ? "Saving..."
+            : isEditing
+              ? "Update Product"
+              : "Create Product"}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default AdminProductForm;

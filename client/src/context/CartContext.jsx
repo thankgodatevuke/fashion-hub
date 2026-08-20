@@ -14,6 +14,12 @@ export const CartProvider = ({ children }) => {
   }, [cartItems]);
 
   const addToCart = (product, selectedSize, selectedColor) => {
+    // Check if the product is out of stock
+    if (product.stock <= 0) {
+      alert("Sorry, this item is out of stock.");
+      return;
+    }
+
     setCartItems((prev) => {
       const existing = prev.find(
         (item) =>
@@ -22,6 +28,11 @@ export const CartProvider = ({ children }) => {
           item.color === selectedColor,
       );
       if (existing) {
+        // If the quantity already equals or exceeds stock, block it
+        if (existing.quantity >= product.stock) {
+          alert(`Only ${product.stock} left in stock.`);
+          return prev;
+        }
         return prev.map((item) =>
           item.id === product.id &&
           item.size === selectedSize &&

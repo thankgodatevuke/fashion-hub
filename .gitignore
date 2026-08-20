@@ -4,3 +4,5 @@ client/node_modules/
 server/node_modules/
 client/dist/
 client/build/
+# Server uploads (local test files)
+server/uploads/

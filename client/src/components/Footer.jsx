@@ -125,22 +125,34 @@ const Footer = () => {
           </h4>
           <ul className="space-y-2 text-sm font-light">
             <li>
-              <Link to="/legal" className="hover:text-luxury-gold transition">
+              <Link
+                to="/legal#privacy"
+                className="hover:text-luxury-gold transition"
+              >
                 Privacy & Policy
               </Link>
             </li>
             <li>
-              <Link to="/legal" className="hover:text-luxury-gold transition">
-                Returns & <span className="font-bold">Refunds</span>
+              <Link
+                to="/legal#returns"
+                className="hover:text-luxury-gold transition"
+              >
+                Returns & Refunds
               </Link>
             </li>
             <li>
-              <Link to="/legal" className="hover:text-luxury-gold transition">
+              <Link
+                to="/legal#terms"
+                className="hover:text-luxury-gold transition"
+              >
                 Terms & Conditions
               </Link>
             </li>
             <li>
-              <Link to="/legal" className="hover:text-luxury-gold transition">
+              <Link
+                to="/legal#faq"
+                className="hover:text-luxury-gold transition"
+              >
                 F.A.Q
               </Link>
             </li>
